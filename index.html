@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="signalr.min.js"></script>
+<script src="jquery.min.js"></script>
+<script>
+    $(document).ready(() => {
+        
+
+        async function start()
+        {
+            try {
+                await connection.start();
+            } catch (error) {
+                setTimeout(() => start(), 2000);
+            }
+        }
+        // connection.start();
+        start();
+
+        function animation()
+        {
+            durum.fadeIn(2000, () => {
+                setTimeout(() => {
+                    durum.fadeOut(2000);
+                }, 2000);
+            });
+        }
+
+        const connection = new signalR.HubConnectionBuilder()
+        .withUrl("http://localhost:5296/myhub")
+        .withAutomaticReconnect([1000, 1000, 2000]) // Bu fonksiyon bağlantı var lakin koptuğu durumlarda kullanılır.
+        .build();
+
+        const durum = $("#durum");
+        connection.onreconnecting(error => {
+            durum.css("background-color", "blue");
+            durum.css("color", "white");
+            durum.html("Bağlantı kuruluyor...");
+            animation();
+        });
+
+        connection.onreconnected(connectionId => {
+            durum.css("background-color", "green");
+            durum.css("color", "white");
+            durum.html("Bağlantı kuruldu");
+            animation();
+        });
+
+        connection.onclose(connectorId => {
+            durum.css("background-color", "red");
+            durum.css("color", "white");
+            durum.html("Bağlantılamadı");
+            animation();
+        });
+
+        connection.on("userJoined", connectionId => {
+            durum.html(`${connectionId} bağlandı.`);
+            durum.css("background-color", "green");   
+            animation();                 
+        });
+
+        connection.on("userLeaved", connectionId => {
+            durum.html(`${connectionId} ayrıldı.`);
+            durum.css("background-color", "red");
+            animation();
+        });
+
+        connection.on("clients", clientsData => {
+            let text = "";
+            $.each(clientsData, (index, item) => {
+                text += `<li>${item}</li>`;
+            });
+            $("#clients").html(text);
+        });
+
+        $('#btnGonder').click(() => {
+            let message = $('#txtMessage').val();
+            connection.invoke("SendMessageAsync", message).catch(error => console.log(`Mesaj gönderilirken hata oluştu: ${error}`));
+        });
+
+        $('#btnStartTransaction').click(() => {
+           let startTransactionRequest = JSON.stringify([2, "UniqueID", "StartTransaction", {"connectorId":5, "idTag":"SampleIDTag", "meterStart":0, "reservationId":15, "timestamp":"2023-05-30T14:00:00Z"}]);             
+           connection.invoke("SendMessageAsync", startTransactionRequest).catch(error => console.log(`Mesaj gönderilirken hata oluştu: ${error}`)); 
+        });
+
+        $('#btnStopTransaction').click(() => {
+            let stopTransactionRequest = JSON.stringify([2, "UniqueID", "StopTransaction", {"idTag": "SampleIDTag", "meterStop": 48, "timestamp":"2023-03-15T23:00:00", "transactionId": 22}]);
+            connection.invoke("SendMessageAsync", stopTransactionRequest).catch(error => console.log(error));
+        });
+
+        connection.on("receiveMessage", message => {
+            $("#mesajlar").append(message + "<br>");
+        });
+
+        
+    })
+</script>
+</head>
+<body>
+    <div id="durum" style="display: none;"></div>
+    
+    <input type="text" id="txtMessage">
+    <button id="btnGonder">Gönder</button>
+    <button id="btnStartTransaction">SEND START TRANSACTION REQUEST</button>
+    <button id="btnStopTransaction">SEND STOP TRANSACTION REQUEST</button>
+    <div id="mesajlar"></div>
+    <div>
+        <ul id="clients">
+
+        </ul>
+    </div>
+</body>
+</html>
